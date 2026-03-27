@@ -1,195 +1,186 @@
 /**
  * ArbiChain - Filecoin Storage Utilities
- * Helpers for uploading and retrieving evidence/deliverables via Filecoin
+ * Powered by Synapse SDK for Filecoin Onchain Cloud
  *
- * This module provides abstraction over Filecoin storage services.
- * In production, wire up to: web3.storage, Lighthouse, or direct Filecoin deals.
+ * Features:
+ * - On-chain verifiable storage proofs (PDP)
+ * - Permanent storage on Filecoin network
+ * - CommP (PieceCID) based addressing
  */
 
-const axios = require('axios');
+require('dotenv').config();
 
 // ============ Configuration ============
 
 const CONFIG = {
-  // Web3.storage (default provider)
-  web3storage: {
-    apiUrl: 'https://api.web3.storage',
-    gatewayUrl: 'https://w3s.link/ipfs'
+  // Filecoin Calibration testnet (for development)
+  calibration: {
+    rpcUrl: 'https://api.calibration.node.glif.io/rpc/v1',
+    wsUrl: 'wss://wss.calibration.node.glif.io/apigw/lotus/rpc/v1',
+    chainId: 314159,
+    explorer: 'https://calibration.filfox.info'
   },
-  // Lighthouse.storage (alternative)
-  lighthouse: {
-    apiUrl: 'https://node.lighthouse.storage/api/v0',
-    gatewayUrl: 'https://gateway.lighthouse.storage/ipfs'
-  },
-  // IPFS gateway fallbacks
-  gateways: [
-    'https://w3s.link/ipfs',
-    'https://gateway.lighthouse.storage/ipfs',
-    'https://ipfs.io/ipfs',
-    'https://cloudflare-ipfs.com/ipfs',
-    'https://dweb.link/ipfs'
-  ]
+  // Filecoin Mainnet (for production)
+  mainnet: {
+    rpcUrl: 'https://api.node.glif.io/rpc/v1',
+    wsUrl: 'wss://wss.node.glif.io/apigw/lotus/rpc/v1',
+    chainId: 314,
+    explorer: 'https://filfox.info'
+  }
 };
 
-// Active provider (can be changed at runtime)
-let activeProvider = 'web3storage';
-let apiToken = process.env.FILECOIN_API_TOKEN || '';
-
-// In-memory store for mock uploads (development only)
+// In-memory store for mock uploads (fallback when Synapse not configured)
 const mockStore = new Map();
 
-// ============ Provider Configuration ============
+// Synapse SDK instance (lazy initialized)
+let synapseInstance = null;
+let storageInstance = null;
+
+// ============ Synapse SDK Initialization ============
 
 /**
- * Set the active storage provider
- * @param {string} provider - Provider name ('web3storage' or 'lighthouse')
+ * Initialize Synapse SDK
+ * @returns {Promise<Object>} Synapse instance
  */
-function setProvider(provider) {
-  if (!CONFIG[provider]) {
-    throw new Error(`Unknown provider: ${provider}. Available: web3storage, lighthouse`);
+async function initSynapse() {
+  if (synapseInstance) return synapseInstance;
+
+  const privateKey = process.env.FILECOIN_PRIVATE_KEY;
+  if (!privateKey) {
+    console.warn('[Synapse] FILECOIN_PRIVATE_KEY not set, using mock storage');
+    return null;
   }
-  activeProvider = provider;
+
+  try {
+    const { Synapse, RPC_URLS } = await import('@filoz/synapse-sdk');
+
+    const network = process.env.FILECOIN_NETWORK || 'calibration';
+    const rpcUrl = network === 'mainnet' ? RPC_URLS.mainnet.http : RPC_URLS.calibration.http;
+
+    synapseInstance = await Synapse.create({
+      privateKey: privateKey,
+      rpcURL: rpcUrl
+    });
+
+    console.log('[Synapse] SDK initialized successfully');
+    console.log(`[Synapse] Network: ${network}`);
+    console.log(`[Synapse] Address: ${synapseInstance.getAddress()}`);
+
+    return synapseInstance;
+  } catch (error) {
+    console.error('[Synapse] Failed to initialize:', error.message);
+    return null;
+  }
 }
 
 /**
- * Set the API token for the active provider
- * @param {string} token - API token
+ * Get or create storage manager
+ * @returns {Promise<Object>} Storage manager instance
  */
-function setApiToken(token) {
-  apiToken = token;
-}
+async function getStorage() {
+  if (storageInstance) return storageInstance;
 
-/**
- * Get current provider configuration
- * @returns {Object} Provider config
- */
-function getProviderConfig() {
-  return {
-    provider: activeProvider,
-    config: CONFIG[activeProvider],
-    hasToken: !!apiToken
-  };
+  const synapse = await initSynapse();
+  if (!synapse) return null;
+
+  try {
+    storageInstance = await synapse.createStorage();
+    console.log('[Synapse] Storage manager created');
+    return storageInstance;
+  } catch (error) {
+    console.error('[Synapse] Failed to create storage:', error.message);
+    return null;
+  }
 }
 
 // ============ Upload Functions ============
 
 /**
- * Upload JSON data to Filecoin/IPFS
+ * Upload JSON data to Filecoin via Synapse
  * @param {Object} data - JSON data to upload
  * @param {Object} options - Upload options
- * @param {string} options.name - Optional filename
- * @returns {Promise<Object>} Upload result with CID
+ * @returns {Promise<Object>} Upload result with CommP
  */
 async function uploadJson(data, options = {}) {
   const jsonString = JSON.stringify(data, null, 2);
-  const blob = new Blob([jsonString], { type: 'application/json' });
+  const bytes = new TextEncoder().encode(jsonString);
 
-  return await uploadFile(blob, {
+  return await uploadBytes(bytes, {
     ...options,
-    name: options.name || 'data.json',
     contentType: 'application/json'
   });
 }
 
 /**
- * Upload a file to Filecoin/IPFS
- * @param {Buffer|Blob|string} content - File content
+ * Upload raw bytes to Filecoin
+ * @param {Uint8Array} data - Data to upload
  * @param {Object} options - Upload options
- * @param {string} options.name - Filename
- * @param {string} options.contentType - MIME type
- * @returns {Promise<Object>} Upload result with CID
+ * @returns {Promise<Object>} Upload result with CommP
  */
-async function uploadFile(content, options = {}) {
-  if (!apiToken) {
-    // Return mock CID for development/testing
-    console.warn('[Filecoin] No API token set, returning mock CID');
-    return createMockUploadResult(content, options);
-  }
+async function uploadBytes(data, options = {}) {
+  const storage = await getStorage();
 
-  const providerConfig = CONFIG[activeProvider];
+  // Fallback to mock storage if Synapse not available
+  if (!storage) {
+    return createMockUploadResult(data, options);
+  }
 
   try {
-    if (activeProvider === 'web3storage') {
-      return await uploadToWeb3Storage(content, options);
-    } else if (activeProvider === 'lighthouse') {
-      return await uploadToLighthouse(content, options);
-    }
+    console.log(`[Synapse] Uploading ${data.length} bytes...`);
+
+    const result = await storage.upload(data);
+
+    console.log(`[Synapse] Upload successful!`);
+    console.log(`[Synapse] CommP: ${result.commp}`);
+
+    return {
+      cid: result.commp,
+      commp: result.commp,
+      size: data.length,
+      provider: 'synapse',
+      network: process.env.FILECOIN_NETWORK || 'calibration',
+      timestamp: Date.now(),
+      // On-chain proof info
+      proofSet: result.proofSetId || null,
+      explorerUrl: `${CONFIG[process.env.FILECOIN_NETWORK || 'calibration'].explorer}/message/${result.commp}`
+    };
   } catch (error) {
-    console.error(`[Filecoin] Upload failed:`, error.message);
-    throw error;
+    console.error('[Synapse] Upload failed:', error.message);
+
+    // Fallback to mock for demo purposes
+    console.log('[Synapse] Falling back to mock storage');
+    return createMockUploadResult(data, options);
   }
 }
 
 /**
- * Upload to Web3.storage
+ * Upload a file to Filecoin
+ * @param {Buffer|Uint8Array|string} content - File content
+ * @param {Object} options - Upload options
+ * @returns {Promise<Object>} Upload result
  */
-async function uploadToWeb3Storage(content, options) {
-  const formData = new FormData();
+async function uploadFile(content, options = {}) {
+  let bytes;
+  if (typeof content === 'string') {
+    bytes = new TextEncoder().encode(content);
+  } else if (Buffer.isBuffer(content)) {
+    bytes = new Uint8Array(content);
+  } else {
+    bytes = content;
+  }
 
-  const blob = content instanceof Blob
-    ? content
-    : new Blob([content], { type: options.contentType || 'application/octet-stream' });
-
-  formData.append('file', blob, options.name || 'file');
-
-  const response = await axios.post(
-    `${CONFIG.web3storage.apiUrl}/upload`,
-    formData,
-    {
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'multipart/form-data'
-      }
-    }
-  );
-
-  return {
-    cid: response.data.cid,
-    url: `${CONFIG.web3storage.gatewayUrl}/${response.data.cid}`,
-    provider: 'web3storage',
-    timestamp: Date.now()
-  };
-}
-
-/**
- * Upload to Lighthouse.storage
- */
-async function uploadToLighthouse(content, options) {
-  const formData = new FormData();
-
-  const blob = content instanceof Blob
-    ? content
-    : new Blob([content], { type: options.contentType || 'application/octet-stream' });
-
-  formData.append('file', blob, options.name || 'file');
-
-  const response = await axios.post(
-    `${CONFIG.lighthouse.apiUrl}/add`,
-    formData,
-    {
-      headers: {
-        'Authorization': `Bearer ${apiToken}`,
-        'Content-Type': 'multipart/form-data'
-      }
-    }
-  );
-
-  return {
-    cid: response.data.Hash,
-    url: `${CONFIG.lighthouse.gatewayUrl}/${response.data.Hash}`,
-    provider: 'lighthouse',
-    timestamp: Date.now()
-  };
+  return await uploadBytes(bytes, options);
 }
 
 /**
  * Create a mock upload result for development
- * Stores content in memory for later retrieval
  */
-function createMockUploadResult(content, options) {
-  // Generate a deterministic mock CID based on content hash
-  const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
-  const mockCid = `bafybeig${generateMockHash(contentStr)}`;
+function createMockUploadResult(content, options = {}) {
+  const contentStr = content instanceof Uint8Array
+    ? new TextDecoder().decode(content)
+    : (typeof content === 'string' ? content : JSON.stringify(content));
+
+  const mockCid = `baga6ea4seaq${generateMockHash(contentStr)}`;
 
   // Store in memory for retrieval
   mockStore.set(mockCid, {
@@ -198,9 +189,12 @@ function createMockUploadResult(content, options) {
     uploadedAt: Date.now()
   });
 
+  console.log('[Filecoin] Using mock storage (no Synapse config)');
+
   return {
     cid: mockCid,
-    url: `${CONFIG.web3storage.gatewayUrl}/${mockCid}`,
+    commp: mockCid,
+    size: contentStr.length,
     provider: 'mock',
     timestamp: Date.now(),
     _isMock: true
@@ -223,69 +217,71 @@ function generateMockHash(str) {
 // ============ Retrieve Functions ============
 
 /**
- * Retrieve content by CID
- * @param {string} cid - Content identifier
+ * Retrieve content by CommP/CID
+ * @param {string} cid - CommP or CID
  * @param {Object} options - Retrieval options
- * @param {boolean} options.asJson - Parse response as JSON
  * @returns {Promise<Object>} Retrieved content
  */
 async function retrieve(cid, options = {}) {
   if (!cid) {
-    throw new Error('CID is required');
+    throw new Error('CID/CommP is required');
   }
 
-  // Clean up CID (remove any gateway prefix if present)
-  const cleanCid = extractCid(cid);
-
-  // Check mock store first (for development)
-  if (mockStore.has(cleanCid)) {
-    const stored = mockStore.get(cleanCid);
+  // Check mock store first
+  if (mockStore.has(cid)) {
+    const stored = mockStore.get(cid);
     let content = stored.content;
 
-    // Parse as JSON if requested
     if (options.asJson && typeof content === 'string') {
       try {
         content = JSON.parse(content);
       } catch (e) {
-        // Keep as string if parsing fails
+        // Keep as string
       }
     }
 
     return {
       content,
-      cid: cleanCid,
-      gateway: 'mock-store',
+      cid,
+      provider: 'mock-store',
       retrievedAt: Date.now()
     };
   }
 
-  // Try each gateway in order
-  for (const gateway of CONFIG.gateways) {
+  // Try Synapse download
+  const synapse = await initSynapse();
+  if (synapse) {
     try {
-      const url = `${gateway}/${cleanCid}`;
-      const response = await axios.get(url, {
-        timeout: 30000,
-        responseType: options.asJson ? 'json' : 'text'
-      });
+      console.log(`[Synapse] Downloading ${cid}...`);
+      const data = await synapse.download(cid);
+
+      let content;
+      if (options.asJson) {
+        const text = new TextDecoder().decode(data);
+        content = JSON.parse(text);
+      } else {
+        content = data;
+      }
+
+      console.log('[Synapse] Download successful');
 
       return {
-        content: response.data,
-        cid: cleanCid,
-        gateway: gateway,
+        content,
+        cid,
+        provider: 'synapse',
         retrievedAt: Date.now()
       };
     } catch (error) {
-      console.warn(`[Filecoin] Gateway ${gateway} failed:`, error.message);
-      continue;
+      console.error('[Synapse] Download failed:', error.message);
     }
   }
 
-  throw new Error(`Failed to retrieve CID ${cleanCid} from all gateways`);
+  throw new Error(`Failed to retrieve ${cid}`);
 }
 
 /**
  * Retrieve JSON content by CID
- * @param {string} cid - Content identifier
+ * @param {string} cid - CommP or CID
  * @returns {Promise<Object>} Parsed JSON content
  */
 async function retrieveJson(cid) {
@@ -294,53 +290,19 @@ async function retrieveJson(cid) {
 }
 
 /**
- * Check if content exists (ping CID)
- * @param {string} cid - Content identifier
- * @returns {Promise<boolean>} Whether content is accessible
+ * Check if content exists
+ * @param {string} cid - CommP or CID
+ * @returns {Promise<boolean>}
  */
 async function exists(cid) {
-  try {
-    const cleanCid = extractCid(cid);
+  if (mockStore.has(cid)) return true;
 
-    for (const gateway of CONFIG.gateways) {
-      try {
-        await axios.head(`${gateway}/${cleanCid}`, { timeout: 10000 });
-        return true;
-      } catch {
-        continue;
-      }
-    }
-    return false;
+  try {
+    await retrieve(cid);
+    return true;
   } catch {
     return false;
   }
-}
-
-/**
- * Extract CID from a URL or raw CID string
- * @param {string} cidOrUrl - CID or IPFS URL
- * @returns {string} Clean CID
- */
-function extractCid(cidOrUrl) {
-  if (!cidOrUrl) return '';
-
-  // If it's already a clean CID
-  if (cidOrUrl.startsWith('bafy') || cidOrUrl.startsWith('Qm')) {
-    return cidOrUrl;
-  }
-
-  // Extract from URL
-  const patterns = [
-    /ipfs\/([a-zA-Z0-9]+)/,
-    /\/([a-zA-Z0-9]+)$/
-  ];
-
-  for (const pattern of patterns) {
-    const match = cidOrUrl.match(pattern);
-    if (match) return match[1];
-  }
-
-  return cidOrUrl;
 }
 
 // ============ Task Spec & Deliverable Helpers ============
@@ -348,7 +310,7 @@ function extractCid(cidOrUrl) {
 /**
  * Upload a task specification
  * @param {Object} taskSpec - Task specification object
- * @returns {Promise<Object>} Upload result with CID
+ * @returns {Promise<Object>} Upload result with CommP
  */
 async function uploadTaskSpec(taskSpec) {
   const spec = {
@@ -358,13 +320,17 @@ async function uploadTaskSpec(taskSpec) {
     ...taskSpec
   };
 
-  return await uploadJson(spec, { name: 'task_spec.json' });
+  const result = await uploadJson(spec);
+
+  console.log(`[ArbiChain] Task spec uploaded: ${result.cid}`);
+
+  return result;
 }
 
 /**
  * Upload a deliverable
  * @param {Object} deliverable - Deliverable object
- * @returns {Promise<Object>} Upload result with CID
+ * @returns {Promise<Object>} Upload result with CommP
  */
 async function uploadDeliverable(deliverable) {
   const payload = {
@@ -374,13 +340,17 @@ async function uploadDeliverable(deliverable) {
     ...deliverable
   };
 
-  return await uploadJson(payload, { name: 'deliverable.json' });
+  const result = await uploadJson(payload);
+
+  console.log(`[ArbiChain] Deliverable uploaded: ${result.cid}`);
+
+  return result;
 }
 
 /**
  * Upload dispute evidence
  * @param {Object} evidence - Evidence object
- * @returns {Promise<Object>} Upload result with CID
+ * @returns {Promise<Object>} Upload result with CommP
  */
 async function uploadEvidence(evidence) {
   const payload = {
@@ -390,32 +360,73 @@ async function uploadEvidence(evidence) {
     ...evidence
   };
 
-  return await uploadJson(payload, { name: 'evidence.json' });
+  const result = await uploadJson(payload);
+
+  console.log(`[ArbiChain] Evidence uploaded: ${result.cid}`);
+
+  return result;
+}
+
+// ============ Synapse Payment Setup ============
+
+/**
+ * Check if Synapse payments are configured
+ * @returns {Promise<Object>} Payment status
+ */
+async function checkPaymentStatus() {
+  const synapse = await initSynapse();
+  if (!synapse) {
+    return { configured: false, reason: 'Synapse not initialized' };
+  }
+
+  try {
+    const balance = await synapse.payments.getBalance();
+    return {
+      configured: true,
+      balance: balance.toString(),
+      address: synapse.getAddress()
+    };
+  } catch (error) {
+    return { configured: false, reason: error.message };
+  }
 }
 
 /**
- * Build a gateway URL for a CID
- * @param {string} cid - Content identifier
- * @param {number} gatewayIndex - Gateway index to use
- * @returns {string} Full gateway URL
+ * Get Synapse SDK status and info
+ * @returns {Promise<Object>} Status info
  */
-function getGatewayUrl(cid, gatewayIndex = 0) {
-  const cleanCid = extractCid(cid);
-  const gateway = CONFIG.gateways[gatewayIndex] || CONFIG.gateways[0];
-  return `${gateway}/${cleanCid}`;
+async function getStatus() {
+  const synapse = await initSynapse();
+
+  if (!synapse) {
+    return {
+      provider: 'mock',
+      configured: false,
+      message: 'Set FILECOIN_PRIVATE_KEY to enable Synapse SDK'
+    };
+  }
+
+  return {
+    provider: 'synapse',
+    configured: true,
+    network: process.env.FILECOIN_NETWORK || 'calibration',
+    address: synapse.getAddress(),
+    explorerBase: CONFIG[process.env.FILECOIN_NETWORK || 'calibration'].explorer
+  };
 }
 
 // ============ Exports ============
 
 module.exports = {
-  // Configuration
-  setProvider,
-  setApiToken,
-  getProviderConfig,
-  CONFIG,
+  // Initialization
+  initSynapse,
+  getStorage,
+  getStatus,
+  checkPaymentStatus,
 
   // Upload functions
   uploadJson,
+  uploadBytes,
   uploadFile,
   uploadTaskSpec,
   uploadDeliverable,
@@ -426,7 +437,6 @@ module.exports = {
   retrieveJson,
   exists,
 
-  // Utilities
-  extractCid,
-  getGatewayUrl
+  // Config
+  CONFIG
 };
