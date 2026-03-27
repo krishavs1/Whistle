@@ -13,6 +13,7 @@ require('dotenv').config();
 const MIN_UPLOAD_BYTES = 127;
 
 const mockStore = new Map();
+const retrievalUrlStore = new Map();
 
 let synapseInstance = null;
 let isSetupComplete = false;
@@ -145,11 +146,14 @@ async function uploadBytes(data, options = {}) {
       const result = await synapse.storage.upload(payload);
       console.log('[Synapse] Upload successful!');
 
-      const pieceCid = typeof result.pieceCid === 'object' && result.pieceCid['/']
-        ? result.pieceCid['/']
-        : String(result.pieceCid);
+      const pieceCid = result.pieceCid?.toString?.() || String(result.pieceCid);
 
       console.log(`[Synapse] PieceCID: ${pieceCid}`);
+
+      const retrievalUrl = result.copies?.[0]?.retrievalUrl || null;
+      if (retrievalUrl) {
+        retrievalUrlStore.set(pieceCid, retrievalUrl);
+      }
 
       return {
         cid: pieceCid,
@@ -159,7 +163,7 @@ async function uploadBytes(data, options = {}) {
         network: process.env.FILECOIN_NETWORK || 'calibration',
         timestamp: Date.now(),
         copies: result.copies || [],
-        retrievalUrl: result.copies?.[0]?.retrievalUrl || null
+        retrievalUrl
       };
     } catch (error) {
       console.error('[Synapse] Upload failed:', error.message);
@@ -227,6 +231,22 @@ async function retrieve(cid, options = {}) {
       return { content, cid, provider: 'synapse', retrievedAt: Date.now() };
     } catch (error) {
       console.error('[Synapse] Download failed:', error.message);
+    }
+  }
+
+  const url = options.retrievalUrl || retrievalUrlStore.get(cid);
+  if (url) {
+    try {
+      console.log(`[Synapse] Fetching from retrieval URL...`);
+      const response = await fetch(url);
+      if (response.ok) {
+        const buf = await response.arrayBuffer();
+        const bytes = new Uint8Array(buf);
+        let content = options.asJson ? JSON.parse(new TextDecoder().decode(bytes)) : bytes;
+        return { content, cid, provider: 'synapse-http', retrievedAt: Date.now() };
+      }
+    } catch (error) {
+      console.error('[Synapse] HTTP retrieval failed:', error.message);
     }
   }
 
