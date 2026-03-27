@@ -12,9 +12,9 @@ const fontMono = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "ArbiChain - Trustless Escrow & Dispute Resolution",
+  title: "Whistle - Trustless Escrow & Dispute Resolution",
   description:
-    "Demo app for trustless escrow and dispute resolution for AI-agent commerce workflows. Powered by TRON and Filecoin.",
+    "Whistle — demo app for trustless escrow and dispute resolution for AI-agent commerce workflows. Powered by TRON and Filecoin.",
   generator: "v0.app",
   icons: {
     icon: [

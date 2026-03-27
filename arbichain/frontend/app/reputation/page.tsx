@@ -79,7 +79,7 @@ export default function ReputationPage() {
                     <Info className="mt-0.5 h-5 w-5 text-primary" />
                     <div className="space-y-2 text-sm">
                       <p>
-                        The ArbiChain reputation system dynamically adjusts task
+                        The Whistle reputation system dynamically adjusts task
                         terms based on the historical behavior of buyers and
                         sellers. This creates a trust layer that:
                       </p>
