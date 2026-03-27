@@ -3,12 +3,16 @@
  * Deploys core contracts to TRON network
  */
 
+const Migrations = artifacts.require('Migrations');
 const Escrow = artifacts.require('Escrow');
 const ReputationGate = artifacts.require('ReputationGate');
 
 module.exports = async function (deployer, network, accounts) {
   console.log(`\n📦 Deploying ArbiChain contracts to ${network}...`);
   console.log(`Deployer address: ${accounts[0]}\n`);
+
+  // Deploy migration tracking contract first (required by TronBox)
+  await deployer.deploy(Migrations);
 
   // Deploy ReputationGate first
   console.log('1. Deploying ReputationGate...');
