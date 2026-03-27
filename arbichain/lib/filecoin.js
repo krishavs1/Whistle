@@ -143,7 +143,8 @@ async function uploadBytes(data, options = {}) {
     try {
       const payload = padPayload(data);
       console.log(`[Synapse] Uploading ${payload.length} bytes...`);
-      const result = await synapse.storage.upload(payload);
+      const uploadOpts = { providerIds: [4], copies: 1 };
+      const result = await synapse.storage.upload(payload, uploadOpts);
       console.log('[Synapse] Upload successful!');
 
       const pieceCid = result.pieceCid?.toString?.() || String(result.pieceCid);

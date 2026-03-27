@@ -62,26 +62,26 @@ async function main() {
   const matches = JSON.stringify(testData) === JSON.stringify(retrieved);
   console.log(`\n${matches ? '✅' : '❌'} Data integrity: ${matches ? 'PASSED' : 'FAILED'}`);
 
-  // Test ArbiChain helpers
-  console.log('\n📋 Testing ArbiChain helpers...\n');
+  // Test ArbiChain helpers (parallel uploads for speed)
+  console.log('\n📋 Testing ArbiChain helpers (parallel)...\n');
 
-  const taskSpec = await filecoin.uploadTaskSpec({
-    title: 'Test Task',
-    description: 'A test task for Filecoin integration',
-    requirements: ['Requirement 1', 'Requirement 2']
-  });
+  const [taskSpec, deliverable, evidence] = await Promise.all([
+    filecoin.uploadTaskSpec({
+      title: 'Test Task',
+      description: 'A test task for Filecoin integration',
+      requirements: ['Requirement 1', 'Requirement 2']
+    }),
+    filecoin.uploadDeliverable({
+      taskId: 'test-123',
+      content: { result: 'Task completed!' }
+    }),
+    filecoin.uploadEvidence({
+      disputeId: 'dispute-456',
+      claim: 'Evidence for dispute resolution'
+    })
+  ]);
   console.log(`   Task Spec CID: ${taskSpec.cid}`);
-
-  const deliverable = await filecoin.uploadDeliverable({
-    taskId: 'test-123',
-    content: { result: 'Task completed!' }
-  });
   console.log(`   Deliverable CID: ${deliverable.cid}`);
-
-  const evidence = await filecoin.uploadEvidence({
-    disputeId: 'dispute-456',
-    claim: 'Evidence for dispute resolution'
-  });
   console.log(`   Evidence CID: ${evidence.cid}`);
 
   console.log('\n' + '═'.repeat(50));
