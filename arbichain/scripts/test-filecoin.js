@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Test Filecoin/Synapse Integration
+ * ArbiChain - Test Filecoin/Lighthouse Integration
  * Run: node scripts/test-filecoin.js
  */
 
@@ -11,21 +11,28 @@ async function main() {
   console.log('═'.repeat(50));
 
   // Check status
-  console.log('\n📊 Checking Synapse SDK status...\n');
+  console.log('\n📊 Checking Synapse status...\n');
   const status = await filecoin.getStatus();
   console.log('Status:', JSON.stringify(status, null, 2));
 
   if (!status.configured) {
-    console.log('\n⚠️  Synapse not configured. Using mock storage for test.\n');
+    console.log('\n⚠️  Synapse not configured. Using mock storage.\n');
     console.log('To enable real Filecoin storage:');
-    console.log('1. Create a Filecoin wallet');
-    console.log('2. Get calibration testnet FIL: https://faucet.calibration.fildev.network/');
-    console.log('3. Add FILECOIN_PRIVATE_KEY=0x... to your .env file');
+    console.log('1. Add FILECOIN_PRIVATE_KEY to .env');
+    console.log('2. Get tFIL: https://faucet.calibnet.chainsafe-fil.io');
+    console.log('3. Get USDFC: https://forest-explorer.chainsafe.dev/faucet/calibnet_usdfc');
+    console.log('4. Run: node scripts/setup-synapse.js');
     console.log('');
+  } else if (!status.ready) {
+    console.log('\n⚠️  Synapse configured but needs setup.\n');
+    console.log('Run: node scripts/setup-synapse.js');
+    console.log('');
+  } else {
+    console.log('\n✅ Synapse configured! Using real Filecoin storage.\n');
   }
 
   // Test upload
-  console.log('\n📤 Testing upload...\n');
+  console.log('📤 Testing upload...\n');
 
   const testData = {
     type: 'arbichain_test',
@@ -42,10 +49,7 @@ async function main() {
   console.log(`   CID/CommP: ${uploadResult.cid}`);
   console.log(`   Provider: ${uploadResult.provider}`);
   console.log(`   Size: ${uploadResult.size} bytes`);
-
-  if (uploadResult.explorerUrl) {
-    console.log(`   Explorer: ${uploadResult.explorerUrl}`);
-  }
+  console.log(`   Network: ${uploadResult.network || 'mock'}`);
 
   // Test retrieval
   console.log('\n📥 Testing retrieval...\n');
@@ -58,7 +62,7 @@ async function main() {
   const matches = JSON.stringify(testData) === JSON.stringify(retrieved);
   console.log(`\n${matches ? '✅' : '❌'} Data integrity: ${matches ? 'PASSED' : 'FAILED'}`);
 
-  // Test ArbiChain-specific uploads
+  // Test ArbiChain helpers
   console.log('\n📋 Testing ArbiChain helpers...\n');
 
   const taskSpec = await filecoin.uploadTaskSpec({
@@ -80,15 +84,16 @@ async function main() {
   });
   console.log(`   Evidence CID: ${evidence.cid}`);
 
-  console.log('\n═'.repeat(50));
+  console.log('\n' + '═'.repeat(50));
   console.log('✅ All tests passed!\n');
 
-  if (status.configured) {
-    console.log('🎉 Synapse SDK is working! Your data is stored on Filecoin.');
-    console.log(`   View on explorer: ${status.explorerBase}\n`);
+  if (status.ready) {
+    console.log('🎉 Real Filecoin storage is working!');
+    console.log('   Your data is permanently stored on Filecoin with on-chain proofs.');
+    console.log(`   CommP: ${uploadResult.commp}\n`);
   } else {
     console.log('ℹ️  Tests passed with mock storage.');
-    console.log('   Configure FILECOIN_PRIVATE_KEY for real Filecoin storage.\n');
+    console.log('   Run setup-synapse.js for permanent Filecoin storage.\n');
   }
 }
 
