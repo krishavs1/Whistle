@@ -35,6 +35,9 @@ const CONFIG = {
 let activeProvider = 'web3storage';
 let apiToken = process.env.FILECOIN_API_TOKEN || '';
 
+// In-memory store for mock uploads (development only)
+const mockStore = new Map();
+
 // ============ Provider Configuration ============
 
 /**
@@ -181,11 +184,19 @@ async function uploadToLighthouse(content, options) {
 
 /**
  * Create a mock upload result for development
+ * Stores content in memory for later retrieval
  */
 function createMockUploadResult(content, options) {
   // Generate a deterministic mock CID based on content hash
   const contentStr = typeof content === 'string' ? content : JSON.stringify(content);
   const mockCid = `bafybeig${generateMockHash(contentStr)}`;
+
+  // Store in memory for retrieval
+  mockStore.set(mockCid, {
+    content: contentStr,
+    contentType: options.contentType || 'application/json',
+    uploadedAt: Date.now()
+  });
 
   return {
     cid: mockCid,
@@ -225,6 +236,28 @@ async function retrieve(cid, options = {}) {
 
   // Clean up CID (remove any gateway prefix if present)
   const cleanCid = extractCid(cid);
+
+  // Check mock store first (for development)
+  if (mockStore.has(cleanCid)) {
+    const stored = mockStore.get(cleanCid);
+    let content = stored.content;
+
+    // Parse as JSON if requested
+    if (options.asJson && typeof content === 'string') {
+      try {
+        content = JSON.parse(content);
+      } catch (e) {
+        // Keep as string if parsing fails
+      }
+    }
+
+    return {
+      content,
+      cid: cleanCid,
+      gateway: 'mock-store',
+      retrievedAt: Date.now()
+    };
+  }
 
   // Try each gateway in order
   for (const gateway of CONFIG.gateways) {
