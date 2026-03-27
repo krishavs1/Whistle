@@ -10,6 +10,7 @@
  */
 
 require('dotenv').config();
+const path = require('path');
 
 // Get private key from environment
 const privateKey = process.env.TRON_PRIVATE_KEY || '';
@@ -73,11 +74,11 @@ module.exports = {
   },
 
   // Solidity source directory
-  contracts_directory: './contracts',
+  contracts_directory: path.join(__dirname, 'contracts'),
 
   // Build output directory
-  contracts_build_directory: './build/contracts',
+  contracts_build_directory: path.join(__dirname, 'build/contracts'),
 
   // Migrations directory
-  migrations_directory: './migrations'
+  migrations_directory: path.join(__dirname, 'migrations')
 };

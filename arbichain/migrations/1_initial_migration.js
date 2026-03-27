@@ -9,7 +9,7 @@ const ReputationGate = artifacts.require('ReputationGate');
 
 module.exports = async function (deployer, network, accounts) {
   console.log(`\n📦 Deploying ArbiChain contracts to ${network}...`);
-  console.log(`Deployer address: ${accounts[0]}\n`);
+  console.log(`Deployer address: ${accounts[0] || '(resolved from contract owner)'}\n`);
 
   // Deploy migration tracking contract first (required by TronBox)
   await deployer.deploy(Migrations);
@@ -22,7 +22,7 @@ module.exports = async function (deployer, network, accounts) {
 
   // Deploy Escrow with deployer as initial arbitrator
   // In production, this should be a multi-sig or DAO address
-  const arbitratorAddress = accounts[0];
+  const arbitratorAddress = (await reputationGate.owner.call());
   console.log(`\n2. Deploying Escrow with arbitrator: ${arbitratorAddress}...`);
   await deployer.deploy(Escrow, arbitratorAddress);
   const escrow = await Escrow.deployed();
