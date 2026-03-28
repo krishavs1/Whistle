@@ -71,6 +71,10 @@ const behavior = {
   autoApproveEnabled: process.env.AUTO_APPROVE === 'true',
   autoDisputeThreshold: parseFloat(process.env.AUTO_DISPUTE_THRESHOLD) || 0.5,
 
+  // Arbitrator: when false (default), disputes are never resolved on-chain from the listen loop;
+  // human runs: node arbitrator.js recommend <taskId> then resolve <taskId> 0|1
+  arbitratorAutoResolve: process.env.ARBITRATOR_AUTO_RESOLVE === 'true',
+
   // Arbitrator settings
   minEvidenceForRuling: parseInt(process.env.MIN_EVIDENCE_FOR_RULING) || 1,
 

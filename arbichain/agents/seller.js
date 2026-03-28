@@ -7,6 +7,7 @@ require('dotenv').config();
 const { createTronWeb, getBalance, waitForConfirmation, getContractEvents } = require('../lib/tron');
 const { uploadDeliverable, retrieveJson } = require('../lib/filecoin');
 const { TaskState, TaskStateLabels } = require('../lib/types');
+const llm = require('../lib/llm');
 const config = require('./config');
 
 // Contract ABIs
@@ -160,12 +161,26 @@ class SellerAgent {
 
     const { taskSpec } = assigned;
 
-    // Simulate AI work based on task spec
     console.log('   Processing task requirements...');
-    await this.sleep(1000); // Simulate work time
+    await this.sleep(500);
 
-    // Generate content based on task type
-    const content = this.simulateWork(taskSpec);
+    let content;
+    if (llm.useLlmSeller()) {
+      try {
+        console.log('   Using OpenAI seller (model:', llm.getModel() + ')...');
+        const draft = await llm.generateSellerDeliverable(taskSpec, taskId, this.address);
+        content = draft.content;
+        if (draft.notes) {
+          console.log('   Seller notes:', draft.notes.slice(0, 120) + (draft.notes.length > 120 ? '…' : ''));
+        }
+      } catch (err) {
+        console.warn('   LLM seller failed, falling back to simulateWork:', err.message);
+        content = this.simulateWork(taskSpec);
+      }
+    } else {
+      await this.sleep(500);
+      content = this.simulateWork(taskSpec);
+    }
 
     console.log('   Deliverable generated.');
     console.log(`   Content preview: ${JSON.stringify(content).slice(0, 100)}...`);

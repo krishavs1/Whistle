@@ -7,6 +7,7 @@ require('dotenv').config();
 const { createTronWeb, getBalance, waitForConfirmation, getContractEvents } = require('../lib/tron');
 const { retrieveJson, uploadEvidence } = require('../lib/filecoin');
 const { TaskState, TaskStateLabels, DisputeRuling, DisputeRulingLabels } = require('../lib/types');
+const llm = require('../lib/llm');
 const config = require('./config');
 
 // Contract ABIs
@@ -279,9 +280,45 @@ class ArbitratorAgent {
   }
 
   /**
-   * Resolve a dispute with a ruling
+   * Heuristic + optional OpenAI drafts for the human arbitrator (nothing submitted on-chain).
+   * @param {string} taskId
+   */
+  async printDisputeRecommendations(taskId) {
+    let evidence = this.pendingDisputes.get(taskId);
+    if (!evidence) {
+      evidence = await this.reviewDispute(taskId);
+    }
+    if (!evidence) {
+      return;
+    }
+
+    const heuristic = this.evaluateEvidence(evidence);
+    console.log('\n--- Heuristic draft (not submitted on-chain) ---');
+    console.log(JSON.stringify(heuristic, null, 2));
+
+    if (llm.useLlmArbitratorAssist()) {
+      try {
+        console.log('\n--- OpenAI assistant draft (advisory only; not submitted) ---');
+        const assist = await llm.arbitratorAssist(evidence);
+        console.log(JSON.stringify(assist, null, 2));
+      } catch (err) {
+        console.warn('OpenAI arbitrator assist failed:', err.message);
+      }
+    } else if (llm.isLlmConfigured()) {
+      console.log('\n(LLM assist off: set USE_LLM_ARBITRATOR_ASSIST=true to enable.)');
+    } else {
+      console.log('\n(Set OPENAI_API_KEY + USE_LLM_ARBITRATOR_ASSIST=true for an LLM draft.)');
+    }
+
+    console.log('\n📌 Human: submit the ruling you approve on-chain:');
+    console.log(`   node arbitrator.js resolve ${taskId} 0   # refund buyer`);
+    console.log(`   node arbitrator.js resolve ${taskId} 1   # pay seller\n`);
+  }
+
+  /**
+   * Resolve a dispute with a ruling (human must pass 0|1 unless ARBITRATOR_AUTO_RESOLVE=true).
    * @param {string} taskId - Task ID
-   * @param {number} ruling - 0 = refund buyer, 1 = pay seller (optional, will auto-evaluate if not provided)
+   * @param {number|null|undefined} ruling - 0 = refund buyer, 1 = pay seller
    */
   async resolveDispute(taskId, ruling = null) {
     console.log(`\n⚖️ Resolving dispute for task ${taskId.slice(0, 10)}...`);
@@ -296,25 +333,32 @@ class ArbitratorAgent {
       throw new Error('Could not gather evidence for dispute');
     }
 
-    // Auto-evaluate if ruling not provided
+    let finalRuling = ruling;
     let evaluation = null;
-    if (ruling === null) {
-      evaluation = this.evaluateEvidence(evidence);
-      ruling = evaluation.ruling;
 
-      console.log(`\n   📊 Evaluation Result:`);
+    if (finalRuling === null || finalRuling === undefined) {
+      if (!config.behavior.arbitratorAutoResolve) {
+        throw new Error(
+          'Human-in-the-loop: pass explicit ruling 0 (refund buyer) or 1 (pay seller). ' +
+            `Run: node arbitrator.js recommend ${taskId}`
+        );
+      }
+      evaluation = this.evaluateEvidence(evidence);
+      finalRuling = evaluation.ruling;
+
+      console.log(`\n   📊 Auto evaluation (ARBITRATOR_AUTO_RESOLVE=true):`);
       console.log(`   Score: ${evaluation.score}/100`);
       console.log(`   Ruling: ${evaluation.rulingLabel}`);
       console.log(`   Confidence: ${(evaluation.confidence * 100).toFixed(1)}%`);
       console.log(`   Reasons:`);
-      evaluation.reasons.forEach(r => console.log(`     - ${r}`));
+      evaluation.reasons.forEach((r) => console.log(`     - ${r}`));
     }
 
     // Submit ruling on-chain
     console.log(`\n   📝 Submitting ruling to blockchain...`);
-    console.log(`   Ruling: ${ruling === 0 ? 'REFUND_BUYER' : 'PAY_SELLER'}`);
+    console.log(`   Ruling: ${finalRuling === 0 ? 'REFUND_BUYER' : 'PAY_SELLER'}`);
 
-    const tx = await this.escrow.resolveDispute(taskId, ruling).send({
+    const tx = await this.escrow.resolveDispute(taskId, finalRuling).send({
       feeLimit: 100000000
     });
 
@@ -325,8 +369,8 @@ class ArbitratorAgent {
     const report = {
       type: 'arbitration_report',
       taskId,
-      ruling,
-      rulingLabel: ruling === 0 ? 'REFUND_BUYER' : 'PAY_SELLER',
+      ruling: finalRuling,
+      rulingLabel: finalRuling === 0 ? 'REFUND_BUYER' : 'PAY_SELLER',
       evaluation,
       evidence: {
         taskSpecCID: evidence.task.taskSpecCID,
@@ -346,18 +390,18 @@ class ArbitratorAgent {
     // Move to resolved
     this.resolvedDisputes.set(taskId, {
       ...evidence,
-      ruling,
+      ruling: finalRuling,
       resolvedAt: Date.now(),
       txHash: tx
     });
     this.pendingDisputes.delete(taskId);
 
-    const winner = ruling === 0 ? evidence.task.buyer : evidence.task.seller;
+    const winner = finalRuling === 0 ? evidence.task.buyer : evidence.task.seller;
     console.log(`\n✅ Dispute resolved!`);
     console.log(`   Winner: ${winner}`);
     console.log(`   View on explorer: ${config.network.explorerUrl}/#/transaction/${tx}\n`);
 
-    return { taskId, ruling, txHash: tx, winner };
+    return { taskId, ruling: finalRuling, txHash: tx, winner };
   }
 
   /**
@@ -383,12 +427,15 @@ class ArbitratorAgent {
         console.log(`   Buyer: ${this.tronWeb.address.fromHex(event.result.buyer)}`);
         console.log(`   Seller: ${this.tronWeb.address.fromHex(event.result.seller)}`);
 
-        // Auto-resolve if in autonomous mode
-        if (config.behavior.autoApproveEnabled) {
-          await this.resolveDispute(taskId);
-        } else {
-          // Just review and queue
-          await this.reviewDispute(taskId);
+        await this.reviewDispute(taskId);
+        await this.printDisputeRecommendations(taskId);
+
+        if (config.behavior.arbitratorAutoResolve) {
+          const ev = this.pendingDisputes.get(taskId);
+          if (ev) {
+            const evaluation = this.evaluateEvidence(ev);
+            await this.resolveDispute(taskId, evaluation.ruling);
+          }
         }
 
         if (event.timestamp > this.lastEventTimestamp) {
@@ -456,26 +503,36 @@ async function main() {
   const command = args[0];
 
   switch (command) {
-    case 'review': {
+    case 'review':
+    case 'recommend': {
       const taskId = args[1];
       if (!taskId) {
-        console.log('Usage: node arbitrator.js review <task_id>');
+        console.log('Usage: node arbitrator.js recommend <task_id>');
         process.exit(1);
       }
-      const evidence = await agent.reviewDispute(taskId);
-      if (evidence) {
-        const evaluation = agent.evaluateEvidence(evidence);
-        console.log('\nEvaluation:', JSON.stringify(evaluation, null, 2));
-      }
+      await agent.printDisputeRecommendations(taskId);
       break;
     }
 
     case 'resolve': {
       const taskId = args[1];
-      const ruling = args[2] !== undefined ? parseInt(args[2]) : null;
+      const rulingArg = args[2];
       if (!taskId) {
-        console.log('Usage: node arbitrator.js resolve <task_id> [ruling]');
-        console.log('  ruling: 0 = refund buyer, 1 = pay seller');
+        console.log('Usage: node arbitrator.js resolve <task_id> <0|1>');
+        console.log('  0 = refund buyer, 1 = pay seller');
+        process.exit(1);
+      }
+      if (rulingArg === undefined || rulingArg === '') {
+        console.error('\nHuman-in-the-loop: you must pass an explicit ruling.');
+        console.error('  0 = refund buyer, 1 = pay seller');
+        console.error(`  Example: node arbitrator.js resolve ${taskId} 1`);
+        console.error(`  Drafts:  node arbitrator.js recommend ${taskId}`);
+        console.error('  (Set ARBITRATOR_AUTO_RESOLVE=true only if you want auto-submit from heuristics.)\n');
+        process.exit(1);
+      }
+      const ruling = parseInt(rulingArg, 10);
+      if (Number.isNaN(ruling) || (ruling !== 0 && ruling !== 1)) {
+        console.error('Ruling must be 0 or 1.');
         process.exit(1);
       }
       await agent.resolveDispute(taskId, ruling);
@@ -500,18 +557,17 @@ async function main() {
 
     default:
       console.log(`
-ArbiChain Arbitrator Agent
+Whistle Arbitrator Agent
 
 Commands:
-  review <taskId>           Review dispute evidence
-  resolve <taskId> [ruling] Resolve dispute (0=refund, 1=pay seller)
-  check <taskId>            Check task status
-  listen                    Start autonomous listening mode
+  recommend <taskId>   Heuristic + optional OpenAI drafts (human decides next)
+  resolve <taskId> <0|1>  Submit ruling on-chain (0=refund buyer, 1=pay seller)
+  check <taskId>       Check task status
+  listen               Watch disputes; prints drafts (auto-resolve only if ARBITRATOR_AUTO_RESOLVE=true)
 
 Examples:
-  node arbitrator.js review 0x1234...
-  node arbitrator.js resolve 0x1234...      # Auto-evaluate
-  node arbitrator.js resolve 0x1234... 1    # Manual ruling
+  node arbitrator.js recommend 0x1234...
+  node arbitrator.js resolve 0x1234... 1
   node arbitrator.js listen
       `);
   }

@@ -7,6 +7,7 @@ require('dotenv').config();
 const { createTronWeb, getBalance, waitForConfirmation, generateTaskId } = require('../lib/tron');
 const { uploadTaskSpec, retrieveJson } = require('../lib/filecoin');
 const { TaskState, TaskStateLabels, generateTaskId: genId } = require('../lib/types');
+const llm = require('../lib/llm');
 const config = require('./config');
 
 // Contract ABIs (simplified for key functions)
@@ -203,43 +204,75 @@ class BuyerAgent {
     console.log('   Task Spec:', JSON.stringify(taskSpec, null, 2).slice(0, 200) + '...');
     console.log('   Deliverable:', JSON.stringify(deliverable, null, 2).slice(0, 200) + '...');
 
-    // Simple automated review logic (can be enhanced with AI)
-    const review = this.evaluateDeliverable(taskSpec, deliverable);
+    const review = await this.evaluateDeliverableWithPolicy(taskSpec, deliverable);
 
     console.log(`   Review Result: ${review.accepted ? 'ACCEPTED' : 'REJECTED'}`);
     console.log(`   Reason: ${review.reason}`);
+    if (review.source) {
+      console.log(`   Source: ${review.source}`);
+    }
 
     return review;
   }
 
   /**
-   * Evaluate deliverable against task spec
-   * Simple heuristic - can be replaced with AI evaluation
+   * Heuristic gate + optional OpenAI buyer review (English).
+   * @param {object} taskSpec
+   * @param {object} deliverable
+   * @returns {Promise<object>}
+   */
+  async evaluateDeliverableWithPolicy(taskSpec, deliverable) {
+    if (!deliverable || !deliverable.content) {
+      return { accepted: false, reason: 'Deliverable has no content', source: 'heuristic' };
+    }
+
+    if (deliverable.taskId && deliverable.taskId !== taskSpec.taskId) {
+      return { accepted: false, reason: 'Deliverable taskId mismatch', source: 'heuristic' };
+    }
+
+    const contentStr = JSON.stringify(deliverable.content);
+    if (contentStr.length < 50) {
+      return { accepted: false, reason: 'Deliverable content too short', source: 'heuristic' };
+    }
+
+    if (llm.useLlmBuyer()) {
+      try {
+        console.log('   Using OpenAI buyer review (model:', llm.getModel() + ')...');
+        const out = await llm.evaluateBuyerDeliverable(taskSpec, deliverable);
+        return {
+          accepted: out.accepted,
+          reason: out.reason,
+          confidence: out.confidence,
+          requirement_results: out.requirement_results,
+          source: 'openai',
+        };
+      } catch (err) {
+        console.warn('   LLM buyer failed, using heuristic:', err.message);
+      }
+    }
+
+    return {
+      accepted: true,
+      reason: 'Deliverable passes basic checks (no LLM or LLM failed)',
+      source: 'heuristic',
+    };
+  }
+
+  /**
+   * @deprecated Use evaluateDeliverableWithPolicy (async).
    */
   evaluateDeliverable(taskSpec, deliverable) {
-    // Check if deliverable has content
     if (!deliverable || !deliverable.content) {
       return { accepted: false, reason: 'Deliverable has no content' };
     }
-
-    // Check if deliverable references the correct task
     if (deliverable.taskId && deliverable.taskId !== taskSpec.taskId) {
       return { accepted: false, reason: 'Deliverable taskId mismatch' };
     }
-
-    // Check completeness (simple heuristic)
     const contentStr = JSON.stringify(deliverable.content);
     if (contentStr.length < 50) {
       return { accepted: false, reason: 'Deliverable content too short' };
     }
-
-    // For demo: 80% acceptance rate
-    const acceptanceScore = Math.random();
-    if (acceptanceScore > 0.2) {
-      return { accepted: true, reason: 'Deliverable meets requirements', score: acceptanceScore };
-    } else {
-      return { accepted: false, reason: 'Deliverable does not meet quality standards', score: acceptanceScore };
-    }
+    return { accepted: true, reason: 'Basic checks only (sync)' };
   }
 
   /**
