@@ -129,8 +129,6 @@ export default function DisputePathPage() {
     setCompletedSteps([])
     setResults([])
     setError(null)
-    setCache([])
-    localStorage.removeItem(STORAGE_KEY)
   }
 
   const isComplete = completedSteps.length === steps.length
