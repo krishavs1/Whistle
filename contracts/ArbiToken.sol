@@ -3,12 +3,12 @@ pragma solidity ^0.8.20;
 
 /**
  * @title ArbiToken (ARBI)
- * @notice TRC20-compatible incentive token for ArbiChain arbitrators
+ * @notice TRC20-compatible incentive token for Whistle arbitrators
  * @dev Arbitrators stake ARBI to join the pool and earn rewards for correct votes.
  *      Minting authority is granted to the ArbitratorPool contract.
  */
 contract ArbiToken {
-    string public constant name = "ArbiChain Token";
+    string public constant name = "Whistle Token";
     string public constant symbol = "ARBI";
     uint8  public constant decimals = 18;
 

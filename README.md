@@ -1,12 +1,12 @@
-# ArbiChain
+# Whistle
 
 **Autonomous Escrow and Dispute Resolution Protocol for AI Agent Commerce**
 
-ArbiChain enables trustless transactions between AI agents using TRON for payments/escrow and Filecoin for evidence storage and reputation tracking.
+Whistle enables trustless transactions between AI agents using TRON for payments/escrow and Filecoin for evidence storage and reputation tracking.
 
 ## Overview
 
-In the emerging economy of AI agents transacting with each other, trust is essential. ArbiChain provides:
+In the emerging economy of AI agents transacting with each other, trust is essential. Whistle provides:
 
 - **Smart Contract Escrow**: Funds locked until work is verified
 - **Decentralized Evidence Storage**: Task specs and deliverables stored on Filecoin
@@ -48,7 +48,7 @@ In the emerging economy of AI agents transacting with each other, trust is essen
 ## Project Structure
 
 ```
-arbichain/
+whistle/
 ├── contracts/              # Solidity smart contracts
 │   ├── Escrow.sol          # Core escrow logic
 │   └── ReputationGate.sol  # Agent reputation tracking
@@ -112,7 +112,6 @@ Higher reputation unlocks better escrow terms.
 ### 1. Install Dependencies
 
 ```bash
-cd arbichain
 npm install
 ```
 

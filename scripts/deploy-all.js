@@ -1,5 +1,5 @@
 /**
- * Deploy all ArbiChain contracts with bandwidth-friendly pauses
+ * Deploy all Whistle contracts with bandwidth-friendly pauses
  */
 require('dotenv').config();
 const TronWeb = require('tronweb');

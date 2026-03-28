@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Test Filecoin/Lighthouse Integration
+ * Whistle - Test Filecoin/Lighthouse Integration
  * Run: node scripts/test-filecoin.js
  */
 
@@ -7,7 +7,7 @@ require('dotenv').config();
 const filecoin = require('../lib/filecoin');
 
 async function main() {
-  console.log('\n🔗 ArbiChain - Filecoin Storage Test\n');
+  console.log('\n🔗 Whistle - Filecoin Storage Test\n');
   console.log('═'.repeat(50));
 
   // Check status
@@ -35,8 +35,8 @@ async function main() {
   console.log('📤 Testing upload...\n');
 
   const testData = {
-    type: 'arbichain_test',
-    message: 'Hello from ArbiChain!',
+    type: 'whistle_test',
+    message: 'Hello from Whistle!',
     timestamp: new Date().toISOString(),
     randomValue: Math.random()
   };
@@ -62,8 +62,8 @@ async function main() {
   const matches = JSON.stringify(testData) === JSON.stringify(retrieved);
   console.log(`\n${matches ? '✅' : '❌'} Data integrity: ${matches ? 'PASSED' : 'FAILED'}`);
 
-  // Test ArbiChain helpers (parallel uploads for speed)
-  console.log('\n📋 Testing ArbiChain helpers (parallel)...\n');
+  // Test Whistle helpers (parallel uploads for speed)
+  console.log('\n📋 Testing Whistle helpers (parallel)...\n');
 
   const [taskSpec, deliverable, evidence] = await Promise.all([
     filecoin.uploadTaskSpec({

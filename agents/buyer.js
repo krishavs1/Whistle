@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Buyer Agent
+ * Whistle - Buyer Agent
  * Autonomous agent that posts tasks, locks escrow, reviews deliverables, and disputes
  */
 
@@ -477,7 +477,7 @@ async function main() {
 
     default:
       console.log(`
-ArbiChain Buyer Agent
+Whistle Buyer Agent
 
 Commands:
   create <seller> <amount>  Create a new task with escrow

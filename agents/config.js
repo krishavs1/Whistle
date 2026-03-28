@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Agent Configuration
+ * Whistle - Agent Configuration
  * Configuration for buyer, seller, and arbitrator agents
  */
 
@@ -143,7 +143,7 @@ function validateConfig() {
  * Print current configuration (masks sensitive data)
  */
 function printConfig() {
-  console.log('\n=== ArbiChain Agent Configuration ===\n');
+  console.log('\n=== Whistle Agent Configuration ===\n');
 
   console.log('Network:');
   console.log(`  Name: ${network.name}`);

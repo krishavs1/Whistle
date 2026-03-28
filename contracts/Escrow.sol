@@ -15,7 +15,7 @@ interface IArbitratorPool {
 }
 
 /**
- * @title ArbiChain Escrow
+ * @title Whistle Escrow
  * @notice Core escrow contract for AI agent commerce with dispute resolution
  * @dev Handles task creation, deadlines, deliverable submission, approval, and arbitration
  */

@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Synapse Payment Setup
+ * Whistle - Synapse Payment Setup
  * Run this ONCE after getting USDFC from faucet
  *
  * Steps:
@@ -12,7 +12,7 @@ require('dotenv').config();
 const { setupPayments } = require('../lib/filecoin');
 
 async function main() {
-  console.log('\n🔧 ArbiChain - Synapse Payment Setup\n');
+  console.log('\n🔧 Whistle - Synapse Payment Setup\n');
   console.log('═'.repeat(50));
 
   const privateKey = process.env.FILECOIN_PRIVATE_KEY;

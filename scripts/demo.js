@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Full Demo Script
+ * Whistle - Full Demo Script
  * Demonstrates: Happy path → Dispute path → Reputation consequences
  *
  * Run: node scripts/demo.js [happy|dispute|both]
@@ -394,12 +394,12 @@ async function main() {
   console.log(`
 ╔══════════════════════════════════════════════════════════════════╗
 ║                                                                  ║
-║      █████╗ ██████╗ ██████╗ ██╗ ██████╗██╗  ██╗ █████╗ ██╗███╗  ║
-║     ██╔══██╗██╔══██╗██╔══██╗██║██╔════╝██║  ██║██╔══██╗██║████╗ ║
-║     ███████║██████╔╝██████╔╝██║██║     ███████║███████║██║██╔██║ ║
-║     ██╔══██║██╔══██╗██╔══██╗██║██║     ██╔══██║██╔══██║██║██║██║ ║
-║     ██║  ██║██║  ██║██████╔╝██║╚██████╗██║  ██║██║  ██║██║██║██║ ║
-║     ╚═╝  ╚═╝╚═╝  ╚═╝╚═════╝ ╚═╝ ╚═════╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝╚═╝ ║
+║  ██╗    ██╗██╗  ██╗██╗███████╗████████╗██╗     ███████╗           ║
+║  ██║    ██║██║  ██║██║██╔════╝╚══██╔══╝██║     ██╔════╝           ║
+║  ██║ █╗ ██║███████║██║███████╗   ██║   ██║     █████╗             ║
+║  ██║███╗██║██╔══██║██║╚════██║   ██║   ██║     ██╔══╝             ║
+║  ╚███╔███╔╝██║  ██║██║███████║   ██║   ███████╗███████╗           ║
+║   ╚══╝╚══╝ ╚═╝  ╚═╝╚═╝╚══════╝   ╚═╝   ╚══════╝╚══════╝           ║
 ║                                                                  ║
 ║         Autonomous Escrow & Dispute Resolution for AI Agents     ║
 ║         TRON (Nile) × Filecoin (Calibration) × Synapse PDP      ║
@@ -471,7 +471,7 @@ async function main() {
 
 if (process.argv.includes('--help') || process.argv.includes('-h')) {
   console.log(`
-ArbiChain Demo
+Whistle Demo
 
 Usage: node scripts/demo.js [mode]
 

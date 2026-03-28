@@ -1,5 +1,5 @@
 /**
- * ArbiChain - TronBox Configuration
+ * Whistle - TronBox Configuration
  * Configuration for deploying contracts to TRON networks
  *
  * Networks:

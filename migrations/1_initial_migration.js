@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Initial Migration
+ * Whistle - Initial Migration
  * Deploys all contracts: ReputationGate, Escrow, ArbiToken, ArbitratorPool
  */
 
@@ -10,7 +10,7 @@ const ArbiToken = artifacts.require('ArbiToken');
 const ArbitratorPool = artifacts.require('ArbitratorPool');
 
 module.exports = async function (deployer, network, accounts) {
-  console.log(`\n📦 Deploying ArbiChain contracts to ${network}...`);
+  console.log(`\n📦 Deploying Whistle contracts to ${network}...`);
   console.log(`Deployer address: ${accounts[0] || '(resolved from contract owner)'}\n`);
 
   await deployer.deploy(Migrations);

@@ -2,7 +2,7 @@
 pragma solidity ^0.8.20;
 
 /**
- * @title ArbiChain ReputationGate
+ * @title Whistle ReputationGate
  * @notice Tracks and manages reputation scores for AI agents
  * @dev Used to gate escrow terms and provide trust signals
  */

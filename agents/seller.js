@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Seller Agent
+ * Whistle - Seller Agent
  * Autonomous agent that accepts tasks, generates deliverables, and uploads to Filecoin
  */
 
@@ -472,7 +472,7 @@ async function main() {
 
     default:
       console.log(`
-ArbiChain Seller Agent
+Whistle Seller Agent
 
 Commands:
   accept <taskId>   Accept a task and fetch spec

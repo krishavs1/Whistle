@@ -1,5 +1,5 @@
 {
-  "name": "arbichain",
+  "name": "whistle",
   "version": "1.0.0",
   "description": "Autonomous escrow and dispute resolution protocol for AI agent commerce using TRON and Filecoin",
   "main": "index.js",
@@ -21,7 +21,7 @@
     "ai-agents",
     "dispute-resolution",
     "blockchain",
-    "arbichain"
+    "whistle"
   ],
   "author": "",
   "license": "MIT",

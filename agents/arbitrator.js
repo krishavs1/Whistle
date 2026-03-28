@@ -1,5 +1,5 @@
 /**
- * ArbiChain - Arbitrator Agent
+ * Whistle - Arbitrator Agent
  * Autonomous agent that monitors disputes, reviews evidence, and makes rulings
  */
 

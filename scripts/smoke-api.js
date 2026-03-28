@@ -1,5 +1,5 @@
 /**
- * API smoke test for ArbiChain frontend routes.
+ * API smoke test for Whistle frontend routes.
  * Requires `npm run dev` to be running with valid .env config.
  */
 
