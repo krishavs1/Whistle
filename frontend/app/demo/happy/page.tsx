@@ -93,6 +93,9 @@ export default function HappyPathPage() {
           description="Walk through successful completion with enforceable protocol deadlines"
         />
         <main className="flex-1 p-6">
+          <div className="mb-4 rounded-lg border border-blue-500/30 bg-blue-500/10 px-4 py-3 text-sm text-blue-200">
+            Each step involves an OpenAI API call, a Filecoin upload through Synapse SDK, and a TRON transaction that needs on-chain confirmation. The demo takes a few minutes to run, so please be patient.
+          </div>
           <div className="grid gap-6 lg:grid-cols-2">
             <div className="space-y-6">
               <Card>
