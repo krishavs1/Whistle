@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { RotateCcw, Play } from "lucide-react"
 import { SidebarProvider, SidebarInset } from "@/components/ui/sidebar"
 import { AppSidebar } from "@/components/app-sidebar"
@@ -55,12 +55,27 @@ interface StepResult {
   data: Record<string, unknown>
 }
 
+const STORAGE_KEY = "whistle-dispute-demo"
+
+function loadSaved() {
+  if (typeof window === "undefined") return null
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
 export default function DisputePathPage() {
-  const [currentStep, setCurrentStep] = useState(0)
-  const [completedSteps, setCompletedSteps] = useState<number[]>([])
+  const saved = loadSaved()
+  const [currentStep, setCurrentStep] = useState(saved?.currentStep ?? 0)
+  const [completedSteps, setCompletedSteps] = useState<number[]>(saved?.completedSteps ?? [])
   const [loadingStep, setLoadingStep] = useState<number | null>(null)
-  const [results, setResults] = useState<StepResult[]>([])
+  const [results, setResults] = useState<StepResult[]>(saved?.results ?? [])
   const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({ currentStep, completedSteps, results }))
+  }, [currentStep, completedSteps, results])
 
   const runStep = async (stepIndex: number) => {
     const step = steps[stepIndex]
@@ -98,6 +113,7 @@ export default function DisputePathPage() {
     setCompletedSteps([])
     setResults([])
     setError(null)
+    localStorage.removeItem(STORAGE_KEY)
   }
 
   const isComplete = completedSteps.length === steps.length
